@@ -11,8 +11,11 @@ import pandas as pd
 
 SQUARE_DIP_INDEX_INPUT = 3
 SQUARE_DIR_INDEX_INPUT = 4
-SQUARE_DIP_INDEX_RESULT = 0
-SQUARE_DIR_INDEX_RESULT = 1
+DIP_SMALLEST_DIFF_INDEX_RESULT = 0
+DIR_SMALLEST_DIFF_INDEX_RESULT = 1
+SQUARE_DIP_INDEX_RESULT = 2
+SQUARE_DIR_INDEX_RESULT = 3
+MIN_DISTANCE_INDEX_RESULT = 4
 
 
 def do_correlate(target_dataframe, correlation_target_dataframe, thread_pool=None):
@@ -28,23 +31,56 @@ def do_correlate(target_dataframe, correlation_target_dataframe, thread_pool=Non
     result_with_mute_flag = result[target_dataframe[target_dataframe['Mute Flag'] == 'M'].index]
     result_without_mute_flag = result[target_dataframe[target_dataframe['Mute Flag'] != 'M'].index]
 
-    mse_dip = np.average(result_without_mute_flag[:, 0])
-    mse_dir = np.average(result_without_mute_flag[:, 1])
-    mspe_dip = np.average(result_with_mute_flag[:, 0])
-    mspe_dir = np.average(result_with_mute_flag[:, 1])
+    mse_dip = np.average(result_without_mute_flag[:, SQUARE_DIP_INDEX_RESULT])
+    mse_dir = np.average(result_without_mute_flag[:, SQUARE_DIR_INDEX_RESULT])
+    mse_mp = np.mean(result_without_mute_flag[:, MIN_DISTANCE_INDEX_RESULT])
+    abs_dip = np.average(np.abs(result_without_mute_flag[:, DIP_SMALLEST_DIFF_INDEX_RESULT]))
+    abs_dir = np.average(np.abs(result_without_mute_flag[:, DIR_SMALLEST_DIFF_INDEX_RESULT]))
+    mean_dip = np.mean(result_without_mute_flag[:, DIP_SMALLEST_DIFF_INDEX_RESULT])
+    mean_dir = np.mean(result_without_mute_flag[:, DIR_SMALLEST_DIFF_INDEX_RESULT])
 
-    print_result_to_console(mse_dip, mse_dir, mspe_dip, mspe_dir,
-                            len(target_dataframe), len(correlation_target_dataframe),
-                            time.time() - start_time)
+    mspe_dip = np.average(result_with_mute_flag[:, SQUARE_DIP_INDEX_RESULT])
+    mspe_dir = np.average(result_with_mute_flag[:, SQUARE_DIR_INDEX_RESULT])
+    mspe_mp = np.mean(result_with_mute_flag[:, MIN_DISTANCE_INDEX_RESULT])
+    abs_p_dip = np.average(np.abs(result_with_mute_flag[:, DIP_SMALLEST_DIFF_INDEX_RESULT]))
+    abs_p_dir = np.average(np.abs(result_with_mute_flag[:, DIR_SMALLEST_DIFF_INDEX_RESULT]))
+    mean_p_dip = np.mean(result_with_mute_flag[:, DIP_SMALLEST_DIFF_INDEX_RESULT])
+    mean_p_dir = np.mean(result_with_mute_flag[:, DIR_SMALLEST_DIFF_INDEX_RESULT])
 
-    return [mse_dip, mse_dir, mspe_dip, mspe_dir]
+    print_result_to_console(
+        mse_dip, mse_dir, abs_dip, abs_dir, mean_dip, mean_dir, mse_mp,
+        mspe_dip, mspe_dir, abs_p_dip, abs_p_dir, mean_p_dip, mean_p_dir, mspe_mp,
+        len(target_dataframe), len(correlation_target_dataframe),
+        time.time() - start_time)
+
+    return [mse_dip, mse_dir, abs_dip, abs_dir, mean_dip, mean_dir, mse_mp,
+            mspe_dip, mspe_dir, abs_p_dip, abs_p_dir, mean_p_dip, mean_p_dir, mspe_mp]
 
 
-def print_result_to_console(mse_dip, mse_dir, mspe_dip, mspe_dir, size_of_target, size_of_correlation, time_taken):
-    print('Mean Square Error - Dip: {0}'.format(mse_dip))
-    print('Mean Square Error - Dir: {0}'.format(mse_dir))
-    print('Mean Square Predictive Error - Dip: {0}'.format(mspe_dip))
-    print('Mean Square Predictive Error - Dir: {0}'.format(mspe_dir))
+def print_result_to_console(mse_dip, mse_dir, abs_dip, abs_dir, mean_dip, mean_dir, mse_mp,
+                            mspe_dip, mspe_dir, abs_p_dip, abs_p_dir, mean_p_dip, mean_p_dir, mspe_mp,
+                            size_of_target, size_of_correlation, time_taken):
+    print('Mean Square Error for dips was {0}'.format(mse_dip))
+    print('Mean Square Predictive Error for dips was {0}\n\n'.format(mspe_dip))
+
+    print('Mean square error for dip directions was {0}'.format(mse_dir))
+    print('Mean square predictive error for dip directions was {0}\n\n'.format(mspe_dir))
+
+    print('Mean absolute deviation for known dips was {0}'.format(abs_dip))
+    print('Mean absolute deviation for muted dips was {0}\n\n'.format(abs_p_dip))
+
+    print('Mean absolute deviation for known dip directions was {0}'.format(abs_dir))
+    print('Mean absolute deviation for muted dip directions was {0}\n\n'.format(abs_p_dir))
+
+    print('Mean deviation for known dips was {0}'.format(mean_dip))
+    print('Mean deviation for muted dipS was {0}\n\n'.format(mean_p_dip))
+
+    print('Mean deviation for known dip directions was {0}'.format(mean_dir))
+    print('Mean deviation for muted dip directions was {0}\n\n'.format(mean_p_dir))
+
+    print('Mean proximity to known points was {0}'.format(mse_mp))
+    print('Mean proximity to muted points was {0}\n\n'.format(mspe_mp))
+
     print("--- Correlated %d x %d points in %.4f seconds ---" % (size_of_target, size_of_correlation, time_taken))
 
 
@@ -71,10 +107,12 @@ def correlate_row(current_row, correlation_target):
             min_distance = distance
             current_min = point
 
-    square_dip = (current_row[SQUARE_DIP_INDEX_INPUT] - current_min[SQUARE_DIP_INDEX_INPUT]) ** 2
-    square_dir = (current_row[SQUARE_DIR_INDEX_INPUT] - current_min[SQUARE_DIR_INDEX_INPUT]) ** 2
+    dip_smallest_diff = (current_row[SQUARE_DIP_INDEX_INPUT] - current_min[SQUARE_DIP_INDEX_INPUT])
+    dir_smallest_diff = (current_row[SQUARE_DIR_INDEX_INPUT] - current_min[SQUARE_DIR_INDEX_INPUT])
+    square_dip = dip_smallest_diff ** 2
+    square_dir = dir_smallest_diff ** 2
 
-    return [square_dip, square_dir]
+    return [dip_smallest_diff, dir_smallest_diff, square_dip, square_dir, min_distance]
 
 
 def main():
@@ -96,7 +134,11 @@ def main():
         result.append([file] + file_result)
 
     print("\n--- Correlated %d files in %.4f seconds ---" % (len(listdir(sys.argv[2])), time.time() - start_time))
-    pd.DataFrame(result, columns=['file', 'mse_dip', 'mse_dir', 'mspe_dip', 'mspe_dir']).to_csv(output, index=False)
+    pd.DataFrame(result, columns=['file',
+                                  'mse_dip', 'mse_dir', 'abs_dip', 'abs_dir', 'mean_dip', 'mean_dir', 'mse_mp',
+                                  'mspe_dip', 'mspe_dir', 'abs_p_dip', 'abs_p_dir', 'mean_p_dip', 'mean_p_dir',
+                                  'mspe_mp'
+                                  ]).to_csv(output, index=False)
 
 
 if __name__ == '__main__':
